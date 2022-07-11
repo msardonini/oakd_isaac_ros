@@ -5,13 +5,6 @@ from launch_ros.descriptions import ComposableNode
 
 
 def generate_launch_description():
-    static_transsform_node = Node(package = "tf2_ros",
-                                    executable = "static_transform_publisher",
-                                    arguments = "--x 0 --y 0 --z 0 --roll 3.14 --pitch -1.57 --yaw 0 --frame-id base_link --child-frame-id imu".split(' '))
-
-    camera_src_node = Node(package = "oakd_s2",
-                       executable = "oakd_s2_src")
-
     visual_slam_node = ComposableNode(
         name='visual_slam_node',
         package='isaac_ros_visual_slam',
@@ -47,4 +40,4 @@ def generate_launch_description():
         output='screen'
     )
 
-    return LaunchDescription([static_transsform_node, camera_src_node, visual_slam_launch_container])
+    return LaunchDescription([visual_slam_launch_container])
