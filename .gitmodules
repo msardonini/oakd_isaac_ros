@@ -1,0 +1,15 @@
+[submodule "src/oakd_s2/external/depthai-core"]
+	path = src/oakd_s2/external/depthai-core
+	url = git@github.com:luxonis/depthai-core.git
+[submodule "src/isaac_ros_common"]
+	path = src/isaac_ros_common
+	url = git@github.com:msardonini/isaac_ros_common.git
+[submodule "src/isaac_ros_image_pipeline"]
+	path = src/isaac_ros_image_pipeline
+	url = git@github.com:NVIDIA-ISAAC-ROS/isaac_ros_image_pipeline.git
+[submodule "src/isaac_ros_nitros"]
+	path = src/isaac_ros_nitros
+	url = git@github.com:NVIDIA-ISAAC-ROS/isaac_ros_nitros.git
+[submodule "src/isaac_ros_visual_slam"]
+	path = src/isaac_ros_visual_slam
+	url = git@github.com:NVIDIA-ISAAC-ROS/isaac_ros_visual_slam.git
