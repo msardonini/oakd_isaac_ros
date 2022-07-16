@@ -1,4 +1,14 @@
 {
+  "emeraldwalk.runonsave": {
+    "commands": [
+      {
+        "match": ".*",
+        "isAsync": true,
+        "cmd": "pre-commit run --file ${file}"
+      },
+    ]
+  },
+
   "files.associations": {
     "atomic": "cpp",
     "cstddef": "cpp",
@@ -69,6 +79,10 @@
     "typeinfo": "cpp",
     "valarray": "cpp",
     "variant": "cpp",
-    "*.ipp": "cpp"
+    "*.ipp": "cpp",
+    "any": "cpp",
+    "hash_map": "cpp",
+    "hash_set": "cpp",
+    "scoped_allocator": "cpp"
   }
 }

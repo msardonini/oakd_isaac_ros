@@ -7,20 +7,17 @@
 
 using namespace std::chrono_literals;
 
-class FixedFrameBroadcaster : public rclcpp::Node
-{
+class FixedFrameBroadcaster : public rclcpp::Node {
 public:
-  FixedFrameBroadcaster()
-  : Node("fixed_frame_tf2_broadcaster")
-  {
+  FixedFrameBroadcaster() : Node("fixed_frame_tf2_broadcaster") {
     tf_publisher_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
     timer_ = this->create_wall_timer(
-      100ms, std::bind(&FixedFrameBroadcaster::broadcast_timer_callback, this));
+        100ms,
+        std::bind(&FixedFrameBroadcaster::broadcast_timer_callback, this));
   }
 
 private:
-  void broadcast_timer_callback()
-  {
+  void broadcast_timer_callback() {
     // rclcpp::Time now = this->get_clock()->now();
     rclcpp::Time now(0, 0);
     geometry_msgs::msg::TransformStamped t;
@@ -42,8 +39,7 @@ private:
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_publisher_;
 };
 
-int main(int argc, char * argv[])
-{
+int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   rclcpp::spin(std::make_shared<FixedFrameBroadcaster>());
   rclcpp::shutdown();

@@ -1,0 +1,7 @@
+# Dockerfile for setting up OakD Driver
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+RUN wget -qO- https://raw.githubusercontent.com/luxonis/depthai-ros/main/install_dependencies.sh | sudo bash
+
+RUN pip3 install numpy pre-commit

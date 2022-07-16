@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
 
-# Need to add depthai-core before project command
-add_subdirectory(external/depthai-core)
-
 project(oakd_s2)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -11,8 +8,15 @@ find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(depthai_ros_msgs REQUIRED)
+find_package(depthai_bridge REQUIRED)
+find_package(depthai CONFIG REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
+
+# This line is a bit of a hack.. ament won't accept depthai::opencv so we have to explicity define where it's
+# libraries are saved
+set(CMAKE_BUILD_RPATH "/usr/local/lib")
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra)
@@ -41,13 +45,15 @@ target_compile_features(oakd_s2_src
 
 target_link_libraries(oakd_s2_src
   depthai::opencv
-  ${OpenCV_LIBS}
-  )
-  ament_target_dependencies(oakd_s2_src
+)
+ament_target_dependencies(oakd_s2_src
   cv_bridge
+  depthai_bridge
+  depthai_ros_msgs
   rclcpp
   sensor_msgs
 )
+
 install(TARGETS oakd_s2_src
   DESTINATION lib/${PROJECT_NAME})
 
@@ -98,4 +104,3 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
-
