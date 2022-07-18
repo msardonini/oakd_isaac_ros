@@ -5,41 +5,37 @@
 #include <queue>
 #include <thread>
 
+#include "depthai/depthai.hpp"
+#include "opencv2/core/core.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 
-#include "depthai/depthai.hpp"
-#include "opencv2/core/core.hpp"
-
 class Pimpl;
 
 class OakD {
-public:
-  OakD();
+ public:
+  OakD(std::shared_ptr<rclcpp::Node> node);
 
   ~OakD();
 
-  int GetSynchronizedData(cv::Mat_<uint8_t> &left_image,
-                          cv::Mat_<uint8_t> &right_image,
-                          std::vector<dai::IMUPacket> &imu_data_a,
-                          uint64_t &current_frame_time);
+  int GetSynchronizedData(cv::Mat_<uint8_t> &left_image, cv::Mat_<uint8_t> &right_image,
+                          std::vector<dai::IMUPacket> &imu_data_a, uint64_t &current_frame_time);
 
   void spin();
 
-private:
-  void Init();
+ private:
+  void Init(int fps = 30, bool rectify = true, int imu_sample_rate = 400);
 
   void publish_stereo_image_thread();
 
   void publish_imu_thread();
 
-  std::vector<dai::IMUPacket> GetImuData(std::chrono::milliseconds timeout,
-                                         bool &has_timed_out);
+  std::vector<dai::IMUPacket> GetImuData(std::chrono::milliseconds timeout, bool &has_timed_out);
 
-  std::pair<std::shared_ptr<dai::ImgFrame>, std::shared_ptr<dai::ImgFrame>>
-  GetStereoImagePair(std::chrono::milliseconds timeout, bool &has_timed_out);
+  std::pair<std::shared_ptr<dai::ImgFrame>, std::shared_ptr<dai::ImgFrame>> GetStereoImagePair(
+      std::chrono::milliseconds timeout, bool &has_timed_out);
 
   std::shared_ptr<rclcpp::Node> node_;
 
@@ -50,13 +46,9 @@ private:
 
   std::shared_ptr<dai::node::StereoDepth> stereo_;
   std::shared_ptr<dai::DataOutputQueue> queue_left_;
-  std::shared_ptr<dai::DataOutputQueue> queue_left_rect_;
   std::shared_ptr<dai::DataOutputQueue> queue_right_;
-  std::shared_ptr<dai::DataOutputQueue> queue_right_rect_;
   std::shared_ptr<dai::node::XLinkOut> xout_left_;
-  std::shared_ptr<dai::node::XLinkOut> xout_left_rect_;
   std::shared_ptr<dai::node::XLinkOut> xout_right_;
-  std::shared_ptr<dai::node::XLinkOut> xout_right_rect_;
   std::shared_ptr<dai::node::MonoCamera> mono_left_;
   std::shared_ptr<dai::node::MonoCamera> mono_right_;
   std::shared_ptr<dai::node::IMU> imu_;
@@ -68,11 +60,9 @@ private:
 
   // ROS publisher
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_left_image_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr
-      publisher_left_cam_info_;
+  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr publisher_left_cam_info_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_right_image_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr
-      publisher_right_cam_info_;
+  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr publisher_right_cam_info_;
   // rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_imu_;
 
   std::unique_ptr<Pimpl> pimpl_;

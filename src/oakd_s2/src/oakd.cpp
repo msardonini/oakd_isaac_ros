@@ -12,25 +12,24 @@ static std::atomic<bool> lrcheck{true};
 static std::atomic<bool> extended{false};
 static std::atomic<bool> subpixel{false};
 static constexpr auto timeout_period = std::chrono::milliseconds(1000);
+static constexpr auto stereo_sync_time_threshold_us =
+    25;  //< If left/right images have a timestamp difference of more than this, we will
+         // assume that the images are not synchronized.
 
 class Pimpl {
-public:
+ public:
   std::unique_ptr<dai::rosBridge::ImuConverter> imu_converter;
-  std::unique_ptr<
-      dai::rosBridge::BridgePublisher<sensor_msgs::msg::Imu, dai::IMUData>>
-      imu_publisher;
+  std::unique_ptr<dai::rosBridge::BridgePublisher<sensor_msgs::msg::Imu, dai::IMUData>> imu_publisher;
 
   std::unique_ptr<dai::rosBridge::ImageConverter> left_converter;
   std::unique_ptr<dai::rosBridge::ImageConverter> right_converter;
-  std::unique_ptr<
-      dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame>>
-      left_publisher;
-  std::unique_ptr<
-      dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame>>
-      right_publisher;
+  std::unique_ptr<dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame>> left_publisher;
+  std::unique_ptr<dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame>> right_publisher;
 };
 
-OakD::OakD() { Init(); }
+OakD::OakD(std::shared_ptr<rclcpp::Node> node) : node_(node) {
+  Init(node->get_parameter("fps").as_int(), node->get_parameter("rectify").as_bool());
+}
 
 OakD::~OakD() {
   is_running_ = false;
@@ -46,53 +45,41 @@ OakD::~OakD() {
 
 void OakD::spin() { rclcpp::spin(node_); }
 
-void OakD::Init() {
-  node_ = rclcpp::Node::make_shared("stereo_inertial_node");
-
+void OakD::Init(int fps, bool rectify, int imu_sample_rate) {
   // Initialize ROS publishers
-  publisher_left_image_ = node_->create_publisher<sensor_msgs::msg::Image>(
-      "/stereo_camera/left/image", 1);
+  publisher_left_image_ = node_->create_publisher<sensor_msgs::msg::Image>("/stereo_camera/left/image", 1);
   publisher_left_cam_info_ =
-      node_->create_publisher<sensor_msgs::msg::CameraInfo>(
-          "/stereo_camera/left/camera_info", 1);
-  publisher_right_image_ = node_->create_publisher<sensor_msgs::msg::Image>(
-      "/stereo_camera/right/image", 1);
+      node_->create_publisher<sensor_msgs::msg::CameraInfo>("/stereo_camera/left/camera_info", 1);
+  publisher_right_image_ = node_->create_publisher<sensor_msgs::msg::Image>("/stereo_camera/right/image", 1);
   publisher_right_cam_info_ =
-      node_->create_publisher<sensor_msgs::msg::CameraInfo>(
-          "/stereo_camera/right/camera_info", 1);
+      node_->create_publisher<sensor_msgs::msg::CameraInfo>("/stereo_camera/right/camera_info", 1);
 
   // Define sources and outputs
   mono_left_ = pipeline_.create<dai::node::MonoCamera>();
   mono_right_ = pipeline_.create<dai::node::MonoCamera>();
   xout_left_ = pipeline_.create<dai::node::XLinkOut>();
   xout_right_ = pipeline_.create<dai::node::XLinkOut>();
-  stereo_ = pipeline_.create<dai::node::StereoDepth>();
-  xout_left_rect_ = pipeline_.create<dai::node::XLinkOut>();
-  xout_right_rect_ = pipeline_.create<dai::node::XLinkOut>();
 
   xout_left_->setStreamName("left");
   xout_right_->setStreamName("right");
-  xout_left_rect_->setStreamName("rectified_left");
-  xout_right_rect_->setStreamName("rectified_right");
 
   // Define sources and outputs
   imu_ = pipeline_.create<dai::node::IMU>();
   xout_imu_ = pipeline_.create<dai::node::XLinkOut>();
   xout_imu_->setStreamName("imu");
 
-  // enable ROTATION_VECTOR at 400 hz rate
-  // imu_->enableIMUSensor(dai::IMUSensor::ROTATION_VECTOR, 200);
-  imu_->enableIMUSensor(dai::IMUSensor::GYROSCOPE_CALIBRATED, 200);
-  // imu_->enableIMUSensor(dai::IMUSensor::GYROSCOPE_RAW, 200);
-  // imu_->enableIMUSensor(dai::IMUSensor::LINEAR_ACCELERATION, 200);
-  imu_->enableIMUSensor(dai::IMUSensor::ACCELEROMETER, 200);
-  // imu_->enableIMUSensor(dai::IMUSensor::ACCELEROMETER_RAW, 200);
+  // Hardware Settings
+  mono_left_->setFps(fps);
+  mono_right_->setFps(fps);
+
+  imu_->enableIMUSensor(dai::IMUSensor::GYROSCOPE_CALIBRATED, imu_sample_rate);
+  imu_->enableIMUSensor(dai::IMUSensor::ACCELEROMETER, imu_sample_rate);
 
   // it's recommended to set both setBatchReportThreshold and setMaxBatchReports
   // to 20 when integrating in a pipeline with a lot of input/output connections
   // above this threshold packets will be sent in batch of X, if the host is not
   // blocked and USB bandwidth is available
-  imu_->setBatchReportThreshold(1);
+  imu_->setBatchReportThreshold(imu_sample_rate / fps);
   // maximum number of IMU packets in a batch, if it's reached device will block
   // sending until host can receive it if lower or equal to batchReportThreshold
   // then the sending is always blocking on device useful to reduce device's CPU
@@ -105,35 +92,29 @@ void OakD::Init() {
 
   // Properties
   mono_left_->setBoardSocket(dai::CameraBoardSocket::LEFT);
-  mono_left_->setResolution(
-      dai::MonoCameraProperties::SensorResolution::THE_720_P);
+  mono_left_->setResolution(dai::MonoCameraProperties::SensorResolution::THE_720_P);
   mono_right_->setBoardSocket(dai::CameraBoardSocket::RIGHT);
-  mono_right_->setResolution(
-      dai::MonoCameraProperties::SensorResolution::THE_720_P);
+  mono_right_->setResolution(dai::MonoCameraProperties::SensorResolution::THE_720_P);
 
   // StereoDepth
-  stereo_->setDefaultProfilePreset(
-      dai::node::StereoDepth::PresetMode::HIGH_DENSITY);
-  stereo_->setRectifyEdgeFillColor(0); // black, to better see the cutout
-  // stereo_->setInputResolution(1280, 720);
-  stereo_->initialConfig.setMedianFilter(dai::MedianFilter::KERNEL_5x5);
-  stereo_->setLeftRightCheck(lrcheck);
-  stereo_->setExtendedDisparity(extended);
-  stereo_->setSubpixel(subpixel);
+  if (rectify) {
+    stereo_ = pipeline_.create<dai::node::StereoDepth>();
+    stereo_->setDefaultProfilePreset(dai::node::StereoDepth::PresetMode::HIGH_DENSITY);
+    stereo_->setRectifyEdgeFillColor(0);  // black, to better see the cutout
+    // stereo_->setInputResolution(1280, 720);
+    stereo_->initialConfig.setMedianFilter(dai::MedianFilter::KERNEL_5x5);
+    stereo_->setLeftRightCheck(lrcheck);
+    stereo_->setExtendedDisparity(extended);
+    stereo_->setSubpixel(subpixel);
 
-  // Linking
-  mono_left_->out.link(stereo_->left);
-  mono_right_->out.link(stereo_->right);
-
-  stereo_->syncedLeft.link(xout_left_->input);
-  stereo_->syncedRight.link(xout_right_->input);
-
-  stereo_->rectifiedLeft.link(xout_left_rect_->input);
-  stereo_->rectifiedRight.link(xout_right_rect_->input);
-
-  // Linking
-  // mono_left_->out.link(xout_left_->input);
-  // mono_right_->out.link(xout_right_->input);
+    stereo_->rectifiedLeft.link(xout_left_->input);
+    stereo_->rectifiedRight.link(xout_right_->input);
+    mono_left_->out.link(stereo_->left);
+    mono_right_->out.link(stereo_->right);
+  } else {
+    mono_left_->out.link(xout_left_->input);
+    mono_right_->out.link(xout_right_->input);
+  }
 
   device_ = std::make_unique<dai::Device>(pipeline_);
 
@@ -141,22 +122,18 @@ void OakD::Init() {
 
   // Output queues will be used to get the grayscale frames from the outputs
   // defined above
-  queue_left_ = device_->getOutputQueue("left", 1, false);
-  queue_right_ = device_->getOutputQueue("right", 1, false);
+  queue_left_ = device_->getOutputQueue("left", 3, false);
+  queue_right_ = device_->getOutputQueue("right", 3, false);
   queue_imu_ = device_->getOutputQueue("imu", 30, false);
-  queue_left_rect_ = device_->getOutputQueue("rectified_left", 3, false);
-  queue_right_rect_ = device_->getOutputQueue("rectified_right", 3, false);
 
   start_time_ = std::chrono::steady_clock::now();
 
   is_running_ = true;
-  publish_stereo_image_thread_ =
-      std::thread(&OakD::publish_stereo_image_thread, this);
+  publish_stereo_image_thread_ = std::thread(&OakD::publish_stereo_image_thread, this);
   publish_imu_thread_ = std::thread(&OakD::publish_imu_thread, this);
 }
 
-std::vector<dai::IMUPacket> OakD::GetImuData(std::chrono::milliseconds timeout,
-                                             bool &has_timed_out) {
+std::vector<dai::IMUPacket> OakD::GetImuData(std::chrono::milliseconds timeout, bool &has_timed_out) {
   auto imu_data = queue_imu_->get<dai::IMUData>(timeout, has_timed_out);
 
   if (has_timed_out) {
@@ -167,16 +144,17 @@ std::vector<dai::IMUPacket> OakD::GetImuData(std::chrono::milliseconds timeout,
   }
 }
 
-std::pair<std::shared_ptr<dai::ImgFrame>, std::shared_ptr<dai::ImgFrame>>
-OakD::GetStereoImagePair(std::chrono::milliseconds timeout,
-                         bool &has_timed_out) {
+std::pair<std::shared_ptr<dai::ImgFrame>, std::shared_ptr<dai::ImgFrame>> OakD::GetStereoImagePair(
+    std::chrono::milliseconds timeout, bool &has_timed_out) {
   bool has_timed_out_check = false;
-  auto in_left =
-      queue_left_rect_->get<dai::ImgFrame>(timeout, has_timed_out_check);
+  auto in_left = queue_left_->get<dai::ImgFrame>(timeout, has_timed_out_check);
   has_timed_out |= has_timed_out_check;
-  auto in_right =
-      queue_right_rect_->get<dai::ImgFrame>(timeout, has_timed_out_check);
+  auto in_right = queue_right_->get<dai::ImgFrame>(timeout, has_timed_out_check);
   has_timed_out |= has_timed_out_check;
+
+  if (in_left->getSequenceNum() != in_right->getSequenceNum()) {
+    throw std::runtime_error("Error! Images not synchronized!");
+  }
 
   if (has_timed_out) {
     has_timed_out = true;
@@ -186,15 +164,12 @@ OakD::GetStereoImagePair(std::chrono::milliseconds timeout,
   }
 }
 
-int OakD::GetSynchronizedData(cv::Mat_<uint8_t> &left_image,
-                              cv::Mat_<uint8_t> &right_image,
-                              std::vector<dai::IMUPacket> &imu_data_a,
-                              uint64_t &current_frame_time) {
+int OakD::GetSynchronizedData(cv::Mat_<uint8_t> &left_image, cv::Mat_<uint8_t> &right_image,
+                              std::vector<dai::IMUPacket> &imu_data_a, uint64_t &current_frame_time) {
   bool has_timed_out = false;
   bool has_timed_out_check = false;
 
-  auto stereo_pair =
-      this->GetStereoImagePair(timeout_period, has_timed_out_check);
+  auto stereo_pair = this->GetStereoImagePair(timeout_period, has_timed_out_check);
   has_timed_out |= has_timed_out_check;
   auto imu_data = this->GetImuData(timeout_period, has_timed_out_check);
   has_timed_out |= has_timed_out_check;
@@ -209,8 +184,7 @@ int OakD::GetSynchronizedData(cv::Mat_<uint8_t> &left_image,
   right_image = stereo_pair.second->getCvFrame();
 
   // Get all the IMU data that is in the time range of the current frame
-  std::for_each(imu_data.begin(), imu_data.end(),
-                [&](auto &val) { local_queue_imu_.push(std::move(val)); });
+  std::for_each(imu_data.begin(), imu_data.end(), [&](auto &val) { local_queue_imu_.push(std::move(val)); });
   imu_data_a.clear();
   while (!local_queue_imu_.empty()) {
     auto imu_time = local_queue_imu_.front().gyroscope.timestamp.get();
@@ -222,9 +196,7 @@ int OakD::GetSynchronizedData(cv::Mat_<uint8_t> &left_image,
     local_queue_imu_.pop();
   }
 
-  current_frame_time = std::chrono::duration_cast<std::chrono::microseconds>(
-                           left_cam_time - start_time_)
-                           .count();
+  current_frame_time = std::chrono::duration_cast<std::chrono::microseconds>(left_cam_time - start_time_).count();
 
   // auto handler = dai::CalibrationHandler();
   // auto left_d =
@@ -238,10 +210,8 @@ int OakD::GetSynchronizedData(cv::Mat_<uint8_t> &left_image,
   return 0;
 }
 
-static auto
-get_ts_now(std::chrono::time_point<std::chrono::steady_clock,
-                                   std::chrono::steady_clock::duration>
-               ts_data) {
+static auto get_ts_now(
+    std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> ts_data) {
   auto rclNow = rclcpp::Clock().now();
   auto steadyTime = std::chrono::steady_clock::now();
   auto diffTime = steadyTime - ts_data;
@@ -302,30 +272,19 @@ void OakD::publish_stereo_image_thread() {
     header.stamp = get_ts_now(stereo_pair.first->getTimestamp());
     header.frame_id = "odom";
 
-    cv_bridge::CvImage left_bridge(header, "mono8",
-                                   stereo_pair.first->getCvFrame());
-    cv_bridge::CvImage right_bridge(header, "mono8",
-                                    stereo_pair.second->getCvFrame());
+    cv_bridge::CvImage left_bridge(header, "mono8", stereo_pair.first->getCvFrame());
+    cv_bridge::CvImage right_bridge(header, "mono8", stereo_pair.second->getCvFrame());
 
     // ---------- TODO REMOVE ----------
     sensor_msgs::msg::CameraInfo left_info;
     left_info.header = header;
-    left_info.k = std::array<double, 9>{782.6277760615313,
-                                        0.,
-                                        634.4643730415885,
-                                        0.,
-                                        780.2346160675271,
-                                        385.614038492839,
-                                        0.,
-                                        0.,
-                                        1.};
+    left_info.k = std::array<double, 9>{
+        782.6277760615313, 0., 634.4643730415885, 0., 780.2346160675271, 385.614038492839, 0., 0., 1.};
     left_info.d =
-        std::vector<double>{0.0492716660282836, -0.11871655338048466,
-                            0.0035855531787139148, -0.0003228386098753934};
+        std::vector<double>{0.0492716660282836, -0.11871655338048466, 0.0035855531787139148, -0.0003228386098753934};
     left_info.p = std::array<double, 12>{
 
-        780.84529267, 0., 622.50637817, 0., 0., 780.84529267,
-        395.02053452, 0., 0.,           0., 1., 0.};
+        780.84529267, 0., 622.50637817, 0., 0., 780.84529267, 395.02053452, 0., 0., 0., 1., 0.};
 
     left_info.distortion_model = "pinhole";
     left_info.height = stereo_pair.first->getHeight();
@@ -333,21 +292,12 @@ void OakD::publish_stereo_image_thread() {
 
     sensor_msgs::msg::CameraInfo right_info;
     right_info.header = header;
-    right_info.k = std::array<double, 9>{783.9095741544915,
-                                         0.,
-                                         635.3491224357887,
-                                         0.,
-                                         781.4559692704684,
-                                         385.5555177626138,
-                                         0.,
-                                         0.,
-                                         1.};
+    right_info.k = std::array<double, 9>{
+        783.9095741544915, 0., 635.3491224357887, 0., 781.4559692704684, 385.5555177626138, 0., 0., 1.};
     right_info.d =
-        std::vector<double>{0.017225154487590526, -0.0632091367047388,
-                            0.0018905301214379726, 0.00014073945226710378};
+        std::vector<double>{0.017225154487590526, -0.0632091367047388, 0.0018905301214379726, 0.00014073945226710378};
     right_info.p = std::array<double, 12>{
-        780.84529267, 0., 622.50637817, -59.20166859, 0., 780.84529267,
-        395.02053452, 0., 0.,           0.,           1., 0.,
+        780.84529267, 0., 622.50637817, -59.20166859, 0., 780.84529267, 395.02053452, 0., 0., 0., 1., 0.,
     };
 
     right_info.distortion_model = "pinhole";
@@ -365,19 +315,16 @@ void OakD::publish_stereo_image_thread() {
 void OakD::publish_imu_thread() {
   double linear_accel_cov = 0.0;
   double angular_vel_cov = 0.02;
-  dai::ros::ImuSyncMethod imu_mode =
-      static_cast<dai::ros::ImuSyncMethod>(1); // TODO read into what this means
+  dai::ros::ImuSyncMethod imu_mode = static_cast<dai::ros::ImuSyncMethod>(1);  // TODO read into what this means
 
   pimpl_ = std::make_unique<Pimpl>();
 
-  pimpl_->imu_converter = std::make_unique<dai::rosBridge::ImuConverter>(
-      "oak_imu", imu_mode, linear_accel_cov, angular_vel_cov);
+  pimpl_->imu_converter =
+      std::make_unique<dai::rosBridge::ImuConverter>("oak_imu", imu_mode, linear_accel_cov, angular_vel_cov);
 
-  pimpl_->imu_publisher = std::make_unique<
-      dai::rosBridge::BridgePublisher<sensor_msgs::msg::Imu, dai::IMUData>>(
+  pimpl_->imu_publisher = std::make_unique<dai::rosBridge::BridgePublisher<sensor_msgs::msg::Imu, dai::IMUData>>(
       queue_imu_, node_, std::string("/visual_slam/imu"),
-      std::bind(&dai::rosBridge::ImuConverter::toRosMsg,
-                pimpl_->imu_converter.get(), std::placeholders::_1,
+      std::bind(&dai::rosBridge::ImuConverter::toRosMsg, pimpl_->imu_converter.get(), std::placeholders::_1,
                 std::placeholders::_2),
       30, "", "imu");
   pimpl_->imu_publisher->addPublisherCallback();

@@ -6,7 +6,16 @@
 
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
-  OakD oak;
+
+  auto node = rclcpp::Node::make_shared("stereo_inertial_node");
+
+  node->declare_parameter("fps", 30);
+  node->declare_parameter("rectify", true);
+  node->declare_parameter("imu_sample_rate", 400);
+
+  std::cout << " rectify " << (node->get_parameter("rectify").as_bool() ? "true" : "false") << std::endl;
+
+  OakD oak(node);
   oak.spin();
 
   rclcpp::shutdown();
