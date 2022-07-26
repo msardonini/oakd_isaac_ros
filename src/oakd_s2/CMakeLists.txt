@@ -4,6 +4,7 @@ project(oakd_s2)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(spdlog REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(OpenCV REQUIRED)
@@ -13,6 +14,10 @@ find_package(depthai_bridge REQUIRED)
 find_package(depthai CONFIG REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
+
+set(FLYSTEREO_BUILD_ALGORITHMS OFF)
+set(FLYSTEREO_BUILD_APPS OFF)
+add_subdirectory(external/flyStereo)
 
 # This line is a bit of a hack.. ament won't accept depthai::opencv so we have to explicity define where it's
 # libraries are saved
@@ -30,10 +35,11 @@ find_package(ament_cmake REQUIRED)
 
 add_executable(oakd_s2_src
   src/oakd_s2_src.cpp
-  src/oakd.cpp
+  src/oakd_ros_publisher.cpp
 )
 target_include_directories(oakd_s2_src
   PUBLIC
+    /usr/local/include
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -45,7 +51,10 @@ target_compile_features(oakd_s2_src
 
 target_link_libraries(oakd_s2_src
   depthai::opencv
+  ${OpenCV_LIBRARIES}
+  fly_stereo_sensor_io
 )
+
 ament_target_dependencies(oakd_s2_src
   cv_bridge
   depthai_bridge
@@ -54,42 +63,12 @@ ament_target_dependencies(oakd_s2_src
   sensor_msgs
 )
 
+
 install(TARGETS oakd_s2_src
-  DESTINATION lib/${PROJECT_NAME})
-
-
-add_executable(imu_frame_publisher
-  src/imu_frame_publisher.cpp
-)
-target_include_directories(imu_frame_publisher
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-target_compile_features(imu_frame_publisher
-  PUBLIC
-    c_std_99
-    cxx_std_17
-)  # Require C99 and C++17
-
-ament_target_dependencies(imu_frame_publisher
-  rclcpp
-  geometry_msgs
-  tf2_ros
-  # sensor_msgs
-)
-install(TARGETS imu_frame_publisher
   DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 
-# # debug
-# add_executable(talker src/publisher_member_function.cpp)
-# ament_target_dependencies(talker rclcpp std_msgs)
-# install(TARGETS
-# talker
-# DESTINATION lib/${PROJECT_NAME})
-# # debug
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

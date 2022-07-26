@@ -26,7 +26,7 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': False,
             'denoise_input_images': True,
-            'rectified_images': True,
+            'rectified_images': False,
             'enable_slam_visualization': True,
             'enable_observations_view': True,
             'enable_landmarks_view': True,
@@ -37,7 +37,7 @@ def generate_launch_description():
             'map_frame': 'map',
             'odom_frame': 'odom',
             'input_imu_frame': 'imu',
-            'gravitational_force': [0.0, 0.0, -9.8]
+            'gravitational_force': [9.8, 0.0, 0.0]
         }])
 
     visual_slam_launch_container = ComposableNodeContainer(

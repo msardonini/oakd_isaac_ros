@@ -1,0 +1,13 @@
+# Dockerfile for installing spdlog to the system BEFORE we isntall ROS2
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+RUN cd /opt && \
+  git clone https://github.com/gabime/spdlog.git && \
+  cd spdlog && \
+  git checkout v1.8.2 && \
+  mkdir build && \
+  cd build && \
+  cmake -D SPDLOG_BUILD_SHARED=ON .. && \
+  make -j$('nproc') && \
+  make install

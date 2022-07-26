@@ -1,6 +1,3 @@
-[submodule "src/oakd_s2/external/depthai-core"]
-	path = src/oakd_s2/external/depthai-core
-	url = git@github.com:luxonis/depthai-core.git
 [submodule "src/isaac_ros_image_pipeline"]
 	path = src/isaac_ros_image_pipeline
 	url = git@github.com:NVIDIA-ISAAC-ROS/isaac_ros_image_pipeline.git
@@ -13,3 +10,6 @@
 [submodule "src/isaac_ros_common"]
 	path = src/isaac_ros_common
 	url = git@github.com:NVIDIA-ISAAC-ROS/isaac_ros_common.git
+[submodule "src/oakd_s2/external/flyStereo"]
+	path = src/oakd_s2/external/flyStereo
+	url = git@github.com:msardonini/flyStereo.git

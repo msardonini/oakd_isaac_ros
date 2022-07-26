@@ -1,25 +1,42 @@
 import cv2
 import numpy as np
-
-K1 = np.array([[782.6277760615313,   0.        , 634.4643730415885],
-                [0.        , 780.2346160675271, 385.614038492839],
-                [0.        ,   0.        ,   1.        ]])
-D1 = np.array([0.0492716660282836, -0.11871655338048466, 0.0035855531787139148, -0.0003228386098753934])
-
-K2 = np.array([[783.9095741544915,   0.        , 635.3491224357887],
-                [0.        , 781.4559692704684, 385.5555177626138],
-                [0.        ,   0.        ,   1.        ]])
-
-D2 = np.array([0.017225154487590526, -0.0632091367047388, 0.0018905301214379726, 0.00014073945226710378])
-
-R = np.array([[0.9999879196424135, -0.0007570266872832862, 0.00485669433063787],
-            [0.0007576483504249354, 0.9999997050259231, -0.00012616272307569706],
-            [-0.004856597389490662, 0.0001298408654330149, 0.9999881982319265]])
-
-T = np.array([-0.07581605333277555, 0.00030483334351224313, -0.0003361036352461979])
-
-R1, R2, P1, P2, Q, validPixl, validPixl2 = cv2.stereoRectify(K1, D1, K2, D2, (1280, 720), R, T)
+import yaml
+from pathlib import Path
 
 
-print(f"P1 = {P1}")
-print(f"P2 = {P2}")
+def intrinsics_to_matrix(intrinsics):
+    return np.array([[intrinsics[0], 0, intrinsics[2]],
+                     [0, intrinsics[1], intrinsics[3]], [0, 0, 1]])
+
+
+def main():
+    yaml_file = Path(
+        '/home/msardonini/workspaces/isaac_ros-dev/src/oakd_s2/src/factory_calibration.yaml'
+    )
+
+    # import the data from the yaml file
+    with open(yaml_file, 'r') as stream:
+        calib_data = yaml.safe_load(stream)
+
+    K1 = intrinsics_to_matrix(np.array(calib_data['cam0']['intrinsics']))
+    K2 = intrinsics_to_matrix(np.array(calib_data['cam1']['intrinsics']))
+
+    D1 = np.array(calib_data['cam0']['distortion_coeffs'])
+    D2 = np.array(calib_data['cam1']['distortion_coeffs'])
+
+    affine = np.array(calib_data['cam1']['T_cn_cnm1'])
+
+    R = affine[0:3, 0:3]
+    T = affine[0:3, 3]
+
+    R1, R2, P1, P2, Q, validPixl, validPixl2 = cv2.stereoRectify(
+        K1, D1, K2, D2, (1280, 720), R, T)
+
+    print(f"K1 = {K1}")
+    print(f"K2 = {K2}")
+    print(f"P1 = {P1}")
+    print(f"P2 = {P2}")
+
+
+if __name__ == '__main__':
+    main()
