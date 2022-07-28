@@ -4,7 +4,9 @@
 #include "depthai_bridge/DisparityConverter.hpp"
 #include "depthai_bridge/ImageConverter.hpp"
 #include "depthai_bridge/ImuConverter.hpp"
+#include "flyStereo/stereo_calibration_dai_convert.h"
 #include "opencv2/calib3d.hpp"
+#include "stereo_calibration_ros_convert.hpp"
 
 // #include "oakd_s2/opencv_adapter.h"
 #include "cv_bridge/cv_bridge.h"
@@ -30,11 +32,14 @@ class Pimpl {
 
 OakdRosPublisher::OakdRosPublisher(std::shared_ptr<rclcpp::Node> node, std::optional<StereoCalibration> calibration)
     : OakD(node->get_parameter("fps").as_int(), node->get_parameter("rectify").as_bool()), node_(node) {
-  Init();
-
   if (calibration) {
     calibration_ = std::make_unique<StereoCalibration>(*calibration);
+
+    calibration_handler_ = stereo_calibration_convert<dai::CalibrationHandler>(*calibration_);
+    pipeline_.setCalibrationData(calibration_handler_);
   }
+
+  Init();
 }
 
 OakdRosPublisher::~OakdRosPublisher() {
@@ -100,6 +105,7 @@ auto get_camera_calibration(dai::CalibrationHandler &calibration_handler, dai::C
   return std::make_pair(cam0_intrinsics_ros, cam0_distortion_ros);
 }
 
+template <bool output_opencv_type>
 auto calculate_projection_matrices(std::array<double, 9> K0, std::vector<double> D0, std::array<double, 9> K1,
                                    std::vector<double> D1, cv::Size imsize, std::array<double, 9> R,
                                    std::array<double, 3> T) {
@@ -113,18 +119,27 @@ auto calculate_projection_matrices(std::array<double, 9> K0, std::vector<double>
   cv::Mat_<double> R0_cv, R1_cv;
   cv::Mat_<double> P0_cv, P1_cv;
   cv::Mat_<double> Q_cv;
+  cv::Rect valid_roi_0, valid_roi_1;
 
-  cv::stereoRectify(K0_cv, D0_cv, K1_cv, D1_cv, imsize, R_cv, T_cv, R0_cv, R1_cv, P0_cv, P1_cv, Q_cv);
+  cv::stereoRectify(K0_cv, D0_cv, K1_cv, D1_cv, imsize, R_cv, T_cv, R0_cv, R1_cv, P0_cv, P1_cv, Q_cv,
+                    cv::CALIB_ZERO_DISPARITY, -1, cv::Size(), &valid_roi_0, &valid_roi_1);
 
-  // Convert the Projection matrices back to arrays
-  auto conv_func = [](auto &dst, cv::Mat_<double> &src) {
-    std::memcpy(dst.data(), src.data, src.elemSize() * src.total());
-  };
-  std::array<double, 12> P0, P1;
-  conv_func(P0, P0_cv);
-  conv_func(P1, P1_cv);
+  std::cout << "valid_roi_0: " << valid_roi_0 << std::endl;
+  std::cout << "valid_roi_1: " << valid_roi_1 << std::endl;
 
-  return std::make_pair(P0, P1);
+  if constexpr (output_opencv_type) {
+    return std::make_tuple(R0_cv, R1_cv, P0_cv, P1_cv, Q_cv, valid_roi_0, valid_roi_1);
+  } else {
+    // Convert the Projection matrices back to arrays
+    auto conv_func = [](auto &dst, cv::Mat_<double> &src) {
+      std::memcpy(dst.data(), src.data, src.elemSize() * src.total());
+    };
+    std::array<double, 12> P0, P1;
+    conv_func(P0, P0_cv);
+    conv_func(P1, P1_cv);
+
+    return std::make_tuple(P0, P1);
+  }
 }
 
 void OakdRosPublisher::publish_stereo_image_thread() {
@@ -170,75 +185,6 @@ void OakdRosPublisher::publish_stereo_image_thread() {
 
   // UNCOMMENT BELOW TO PUBLISH STEREO IMAGES
 
-  std::array<double, 9> K0, K1;
-  std::vector<double> D0, D1;
-  std::array<double, 12> P0, P1;
-  std::array<double, 9> R;
-  std::array<double, 3> T;
-  if (calibration_) {
-    auto convert_to_array = [](auto &input, auto &output) {
-      for (auto i = 0; i < input.rows; i++) {
-        for (auto j = 0; j < input.cols; j++) {
-          output[i * input.cols + j] = input(i, j);
-        }
-      }
-    };
-    auto convert_to_array_vec = [](auto &input, auto &output) {
-      for (auto i = 0; i < input.channels; i++) {
-        output[i] = input(i);
-      }
-    };
-
-    convert_to_array(calibration_->K_cam0, K0);
-    convert_to_array(calibration_->K_cam1, K1);
-    D0 = calibration_->D_cam0;
-    D1 = calibration_->D_cam1;
-    convert_to_array(calibration_->R_cam0_cam1, R);
-    convert_to_array_vec(calibration_->T_cam0_cam1, T);
-
-    std::tie(P0, P1) = calculate_projection_matrices(K0, D0, K1, D1, cv::Size(1280, 720), R, T);
-
-    std::cout << "K0: " << std::endl;
-    std::for_each(K0.begin(), K0.end(), [](auto &x) { std::cout << x << " "; });
-    std::cout << std::endl;
-
-    std::cout << "K0 cal " << calibration_->K_cam0 << std::endl;
-
-  } else {
-    auto calibration_handler = device_->readCalibration();
-
-    std::tie(K0, D0) = get_camera_calibration(calibration_handler, dai::CameraBoardSocket::LEFT, cv::Size(1280, 720));
-    std::tie(K1, D1) = get_camera_calibration(calibration_handler, dai::CameraBoardSocket::RIGHT, cv::Size(1280, 720));
-
-    // debug - print the k matrices
-    std::cout << "K0: " << std::endl;
-    std::for_each(K0.begin(), K0.end(), [&](auto val) { std::cout << val << " "; });
-    std::cout << std::endl;
-    std::cout << "K1: " << std::endl;
-    std::for_each(K1.begin(), K1.end(), [&](auto val) { std::cout << val << " "; });
-    std::cout << std::endl;
-
-    auto camera_extrinsic_dai =
-        calibration_handler.getCameraExtrinsics(dai::CameraBoardSocket::LEFT, dai::CameraBoardSocket::RIGHT);
-
-    for (std::size_t i = 0; i < 3; i++) {
-      for (std::size_t j = 0; j < 3; j++) {
-        R[i * 3 + j] = camera_extrinsic_dai[i][j];
-      }
-      T[i] = camera_extrinsic_dai[i][3] / 100.0;  // DAI uses cm, ROS uses m
-    }
-
-    // debug - print the extrinsic matrices
-    std::cout << "R: " << std::endl;
-    std::for_each(R.begin(), R.end(), [&](auto val) { std::cout << val << " "; });
-    std::cout << std::endl;
-    std::cout << "T: " << std::endl;
-    std::for_each(T.begin(), T.end(), [&](auto val) { std::cout << val << " "; });
-    std::cout << std::endl;
-
-    std::tie(P0, P1) = calculate_projection_matrices(K0, D0, K1, D1, cv::Size(1280, 720), R, T);
-  }
-
   while (is_running_.load()) {
     bool has_timed_out = false;
     auto stereo_pair = GetStereoImagePair(timeout_period, has_timed_out);
@@ -255,29 +201,15 @@ void OakdRosPublisher::publish_stereo_image_thread() {
     cv_bridge::CvImage left_bridge(header, "mono8", stereo_pair.first->getCvFrame());
     cv_bridge::CvImage right_bridge(header, "mono8", stereo_pair.second->getCvFrame());
 
-    sensor_msgs::msg::CameraInfo left_info;
-    left_info.header = header;
-    left_info.k = K0;  // TODO figure out why it works better when they are flipped
-    left_info.d = D0;
-    left_info.p = P0;
+    auto stereo_cam_info = stereo_calibration_convert<std::array<sensor_msgs::msg::CameraInfo, 2>>(*calibration_);
 
-    left_info.distortion_model = "rational_polynomial";
-    left_info.height = stereo_pair.first->getHeight();
-    left_info.width = stereo_pair.first->getWidth();
-
-    sensor_msgs::msg::CameraInfo right_info;
-    right_info.header = header;
-    right_info.k = K1;
-    right_info.d = D1;
-    right_info.p = P1;
-    right_info.distortion_model = "rational_polynomial";
-    right_info.height = stereo_pair.second->getHeight();
-    right_info.width = stereo_pair.second->getWidth();
+    stereo_cam_info[0].header = header;
+    stereo_cam_info[1].header = header;
 
     publisher_left_image_->publish(*left_bridge.toImageMsg());
-    publisher_left_cam_info_->publish(left_info);
+    publisher_left_cam_info_->publish(stereo_cam_info[0]);
     publisher_right_image_->publish(*right_bridge.toImageMsg());
-    publisher_right_cam_info_->publish(right_info);
+    publisher_right_cam_info_->publish(stereo_cam_info[1]);
   }
 }
 

@@ -37,6 +37,7 @@ class OakdRosPublisher : public OakD {
   std::atomic<bool> is_running_ = {false};
 
   std::unique_ptr<StereoCalibration> calibration_;
+  dai::CalibrationHandler calibration_handler_;
 
   std::chrono::time_point<std::chrono::steady_clock> start_time_;
 
