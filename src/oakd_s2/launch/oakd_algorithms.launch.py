@@ -15,7 +15,7 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': False,
             'denoise_input_images': True,
-            'rectified_images': True,
+            'rectified_images': False,
             'enable_slam_visualization': True,
             'enable_observations_view': True,
             'enable_landmarks_view': True,

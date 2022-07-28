@@ -14,7 +14,11 @@ def generate_launch_description():
         "--x 0.08038944 --y -0.00407412 --z -0.02168634 --qx -0.7071068 --qy 0.0 --qz 0.7071068 --qw -0.0 --frame-id base_link --child-frame-id imu"
         .split(' '))
 
-    camera_src_node = Node(package="oakd_s2", executable="oakd_s2_src")
+    camera_src_node = Node(package="oakd_s2",
+                           executable="oakd_s2_src",
+                           parameters=[{
+                               'rectify': False
+                           }])
 
     visual_slam_node = ComposableNode(
         # visual_slam_node = Node(
