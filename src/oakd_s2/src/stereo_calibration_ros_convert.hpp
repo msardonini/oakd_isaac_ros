@@ -68,7 +68,7 @@ struct StereoCalibrationConvert<std::array<sensor_msgs::msg::CameraInfo, 2>> {
    * @param rect The cv::Rect to convert
    * @return sensor_msgs::msg::RegionOfInterest
    */
-  sensor_msgs::msg::RegionOfInterest rect_to_roi(const cv::Rect &rect) {
+  static sensor_msgs::msg::RegionOfInterest rect_to_roi(const cv::Rect &rect) {
     sensor_msgs::msg::RegionOfInterest roi;
     roi.x_offset = rect.x;
     roi.y_offset = rect.y;

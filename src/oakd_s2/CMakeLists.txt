@@ -33,29 +33,29 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
-add_executable(oakd_s2_src
-  src/oakd_s2_src.cpp
+add_executable(oakd_s2_publisher_node
+  src/oakd_s2_publisher_node.cpp
   src/oakd_ros_publisher.cpp
 )
-target_include_directories(oakd_s2_src
+target_include_directories(oakd_s2_publisher_node
   PUBLIC
     /usr/local/include
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-target_compile_features(oakd_s2_src
+target_compile_features(oakd_s2_publisher_node
   PUBLIC
     c_std_99
     cxx_std_17
 )  # Require C99 and C++17
 
-target_link_libraries(oakd_s2_src
+target_link_libraries(oakd_s2_publisher_node
   depthai::opencv
   ${OpenCV_LIBRARIES}
   fly_stereo_sensor_io
 )
 
-ament_target_dependencies(oakd_s2_src
+ament_target_dependencies(oakd_s2_publisher_node
   cv_bridge
   depthai_bridge
   depthai_ros_msgs
@@ -64,7 +64,7 @@ ament_target_dependencies(oakd_s2_src
 )
 
 
-install(TARGETS oakd_s2_src
+install(TARGETS oakd_s2_publisher_node
   DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
