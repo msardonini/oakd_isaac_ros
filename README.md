@@ -17,3 +17,8 @@ Plug in the camera via USB3. Inside the docker container, launch the application
 ```sh
 ros2 launch oakd_s2 oakd_s2.launch.py
 ```
+
+To visualize output with Rviz, open a new termal in the container with the `run_docker.sh` script, the run
+```sh
+./rviz.sh
+```
