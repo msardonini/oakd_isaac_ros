@@ -83,6 +83,12 @@
     "any": "cpp",
     "hash_map": "cpp",
     "hash_set": "cpp",
-    "scoped_allocator": "cpp"
+    "scoped_allocator": "cpp",
+    "compare": "cpp",
+    "concepts": "cpp",
+    "numbers": "cpp",
+    "semaphore": "cpp",
+    "stop_token": "cpp",
+    "__nullptr": "cpp"
   }
 }
