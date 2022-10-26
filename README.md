@@ -1,6 +1,14 @@
 # OakD Isaac ROS
 An implementation of Isaac VIO and SLAM using the OakD stereo camera and imu
 
+## Video Demo
+
+Note: This project is still under development. Optimizations for camera calibration, and IMU integration are still
+being developed. Provided here is a short video demo of how the project is progressing.
+
+[![Video Demo](https://img.youtube.com/vi/9tzRvupRecQ/default.jpg)](https://youtu.be/9tzRvupRecQ)
+
+
 ## Docker
 This implementation is intended to be run using the ROS docker system Nvidia provides [here](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common).
 
