@@ -13,3 +13,6 @@
 [submodule "src/oakd_s2/external/flyStereo"]
 	path = src/oakd_s2/external/flyStereo
 	url = git@github.com:msardonini/flyStereo.git
+[submodule "src/luxonis/depthai-ros"]
+	path = src/luxonis/depthai-ros
+	url = https://github.com/luxonis/depthai-ros.git

@@ -27,7 +27,8 @@ struct StereoCalibrationConvert<std::array<sensor_msgs::msg::CameraInfo, 2>> {
     left_cam_info.width = calibration.image_size.width;
     left_cam_info.height = calibration.image_size.height;
     left_cam_info.roi = rect_to_roi(calibration.valid_roi_left);
-    left_cam_info.distortion_model = "rational_polynomial";
+    // left_cam_info.distortion_model = "rational_polynomial";
+    left_cam_info.distortion_model = "plumb_bob";
 
     sensor_msgs::msg::CameraInfo right_cam_info;
     right_cam_info.k = convert_to_array(calibration.K_cam1);
@@ -37,7 +38,8 @@ struct StereoCalibrationConvert<std::array<sensor_msgs::msg::CameraInfo, 2>> {
     right_cam_info.width = calibration.image_size.width;
     right_cam_info.height = calibration.image_size.height;
     right_cam_info.roi = rect_to_roi(calibration.valid_roi_right);
-    right_cam_info.distortion_model = "rational_polynomial";
+    // right_cam_info.distortion_model = "rational_polynomial";
+    right_cam_info.distortion_model = "plumb_bob";
 
     return {left_cam_info, right_cam_info};
   }

@@ -15,7 +15,7 @@ def generate_launch_description():
         .split(' '))
 
     camera_src_node = Node(package="oakd_s2",
-                           executable="oakd_s2_src",
+                           executable="oakd_s2_publisher_node",
                            parameters=[{
                                'rectify': False
                            }])
@@ -41,7 +41,8 @@ def generate_launch_description():
             'map_frame': 'map',
             'odom_frame': 'odom',
             'input_imu_frame': 'imu',
-            'gravitational_force': [9.8, 0.0, 0.0]
+            'gravitational_force': [9.8, 0.0, 0.0],
+            'path_max_size': 1
         }])
 
     visual_slam_launch_container = ComposableNodeContainer(

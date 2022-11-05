@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
 
   spdlog::info("rectify: {}", (node->get_parameter("rectify").as_bool() ? "true" : "false"));
 
-  auto stereo_params = YAML::LoadFile("/workspaces/isaac_ros-dev/src/oakd_s2/conf/oakd_s2.yaml");
+  auto stereo_params = YAML::LoadFile("/workspaces/isaac_ros-dev/src/oakd_s2/conf/oakd_s2_plumb_bob.yaml");
 
   OakdRosPublisher oak(node, stereo_params["stereo_calibration"]);
   oak.spin();
