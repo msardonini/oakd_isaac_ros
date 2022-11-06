@@ -13,4 +13,5 @@ RUN add-apt-repository ppa:ubuntu-toolchain-r/test && \
       libgstreamer1.0-dev \
       libgstreamer-plugins-base1.0-dev
 
+RUN mkdir -p /etc/udev/rules.d
 RUN wget -qO- https://raw.githubusercontent.com/luxonis/depthai-ros/main/install_dependencies.sh | sudo bash
