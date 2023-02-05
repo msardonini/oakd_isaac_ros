@@ -1,6 +1,7 @@
 #pragma once
 
 #include "flyStereo/stereo_calibration.h"
+#include "sensor_msgs/distortion_models.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
 
 /**
@@ -19,6 +20,16 @@ struct StereoCalibrationConvert<std::array<sensor_msgs::msg::CameraInfo, 2>> {
    * @return std::array<sensor_msgs::msg::CameraInfo, 2>
    */
   static std::array<sensor_msgs::msg::CameraInfo, 2> convert(const StereoCalibration &calibration) {
+    auto get_distortion_model = [](std::size_t num_coeffs) {
+      if (num_coeffs == 5) {
+        return sensor_msgs::distortion_models::PLUMB_BOB;
+      } else if (num_coeffs == 8) {
+        return sensor_msgs::distortion_models::RATIONAL_POLYNOMIAL;
+      } else {
+        throw std::runtime_error("Unsupported number of distortion coefficients");
+      }
+    };
+
     sensor_msgs::msg::CameraInfo left_cam_info;
     left_cam_info.k = convert_to_array(calibration.K_cam0);
     left_cam_info.d = calibration.D_cam0;
@@ -27,19 +38,17 @@ struct StereoCalibrationConvert<std::array<sensor_msgs::msg::CameraInfo, 2>> {
     left_cam_info.width = calibration.image_size.width;
     left_cam_info.height = calibration.image_size.height;
     left_cam_info.roi = rect_to_roi(calibration.valid_roi_left);
-    // left_cam_info.distortion_model = "rational_polynomial";
-    left_cam_info.distortion_model = "plumb_bob";
+    left_cam_info.distortion_model = get_distortion_model(calibration.D_cam0.size());
 
     sensor_msgs::msg::CameraInfo right_cam_info;
     right_cam_info.k = convert_to_array(calibration.K_cam1);
     right_cam_info.d = calibration.D_cam1;
-    right_cam_info.r = convert_to_array(calibration.R0);
+    right_cam_info.r = convert_to_array(calibration.R1);
     right_cam_info.p = convert_to_array(calibration.P1);
     right_cam_info.width = calibration.image_size.width;
     right_cam_info.height = calibration.image_size.height;
     right_cam_info.roi = rect_to_roi(calibration.valid_roi_right);
-    // right_cam_info.distortion_model = "rational_polynomial";
-    right_cam_info.distortion_model = "plumb_bob";
+    right_cam_info.distortion_model = get_distortion_model(calibration.D_cam1.size());
 
     return {left_cam_info, right_cam_info};
   }

@@ -90,5 +90,8 @@
     "semaphore": "cpp",
     "stop_token": "cpp",
     "__nullptr": "cpp"
-  }
+  },
+  "cSpell.words": [
+    "Oakd"
+  ]
 }
